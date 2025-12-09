@@ -5,8 +5,6 @@ import 'dart:convert';
 import 'formulario_equipo.dart';
 
 class ScanQRScreen extends StatefulWidget {
-  //final int directorId; // ✅ ID del docente logueado
-
   const ScanQRScreen({super.key});
 
   @override
@@ -15,8 +13,8 @@ class ScanQRScreen extends StatefulWidget {
 
 class _ScanQRScreenState extends State<ScanQRScreen>
     with SingleTickerProviderStateMixin {
-  bool isProcessing = false;
   final MobileScannerController cameraController = MobileScannerController();
+  bool isProcessing = false;
 
   late AnimationController _animationController;
   late Animation<double> _animation;
@@ -24,6 +22,7 @@ class _ScanQRScreenState extends State<ScanQRScreen>
   @override
   void initState() {
     super.initState();
+
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 2),
@@ -34,108 +33,110 @@ class _ScanQRScreenState extends State<ScanQRScreen>
     );
   }
 
+  @override
+  void dispose() {
+    cameraController.dispose();
+    _animationController.dispose();
+    super.dispose();
+  }
+
+  // ===========================================================
+  // 📌 Buscar equipo en la API
+  // ===========================================================
   Future<void> _buscarEquipo(String codigo) async {
     try {
-      print('Código detectado: $codigo');
-
       final url =
-          //'https://microservicio-gestioninventario-e7byadgfgdhpfyen.brazilsouth-01.azurewebsites.net/api/equipos/?codigo=$codigo';
-          'https://apigateway-tesis.azure-api.net/inventario/api/equipos/?codigo=$codigo';
+          "https://apigateway-tesis.azure-api.net/inventario/api/equipos/?codigo=$codigo";
 
       final response = await http.get(Uri.parse(url));
 
-      print('Respuesta ${response.statusCode}: ${response.body}');
-
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
-        List<dynamic> data = [];
 
+        List<dynamic> data = [];
         if (decoded is List) {
           data = decoded;
         } else if (decoded is Map && decoded.isNotEmpty) {
           data = [decoded];
         }
 
-        if (data.isNotEmpty) {
-          final equipo = Map<String, dynamic>.from(data.first);
-
-          final yaRegistrado = (equipo['nombre'] != null &&
-                  equipo['nombre'].toString().trim().isNotEmpty) ||
-              (equipo['categoria'] != null &&
-                  equipo['categoria'].toString().trim().isNotEmpty) ||
-              (equipo['descripcion'] != null &&
-                  equipo['descripcion'].toString().trim().isNotEmpty) ||
-              (equipo['ubicacion'] != null &&
-                  equipo['ubicacion'].toString().trim().isNotEmpty);
-
-          if (yaRegistrado) {
-            _mostrarMensaje(
-                '⚠️ El equipo ${equipo['codigo']} ya está registrado.');
-          } else {
-            await Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => FormularioEquipoScreen(
-                  equipo: equipo,
-                  // directorId: widget.directorId, // ✅ se pasa el ID del docente
-                ),
-              ),
-            );
-          }
-        } else {
-          _mostrarMensaje('No se encontró el equipo con código $codigo');
+        if (data.isEmpty) {
+          _mostrarMensaje("No se encontró el equipo con código $codigo");
+          return;
         }
+
+        final equipo = Map<String, dynamic>.from(data.first);
+
+        final yaRegistrado =
+            (equipo['nombre'] ?? "").toString().trim().isNotEmpty ||
+                (equipo['categoria'] ?? "").toString().trim().isNotEmpty ||
+                (equipo['descripcion'] ?? "").toString().trim().isNotEmpty ||
+                (equipo['ubicacion'] ?? "").toString().trim().isNotEmpty;
+
+        if (yaRegistrado) {
+          _mostrarMensaje(
+              "⚠️ El equipo ${equipo['codigo']} ya está registrado.");
+          return;
+        }
+
+        // ➜ Ir al formulario
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => FormularioEquipoScreen(equipo: equipo),
+          ),
+        );
+
+        // Reactivar cámara al volver
+        cameraController.start();
       } else {
-        _mostrarMensaje('Error ${response.statusCode} al buscar equipo');
+        _mostrarMensaje("Error ${response.statusCode} al consultar equipo.");
       }
     } catch (e) {
-      _mostrarMensaje('Error de conexión: $e');
-    }
-
-    setState(() => isProcessing = false);
-    cameraController.start();
-  }
-
-  void _mostrarMensaje(String msg) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+      _mostrarMensaje("Error de conexión: $e");
     }
   }
 
-  @override
-  void dispose() {
-    _animationController.dispose();
-    cameraController.dispose();
-    super.dispose();
+  // ===========================================================
+  // 📷 Cuando se detecta un QR
+  // ===========================================================
+  void _onDetect(BarcodeCapture capture) async {
+    if (isProcessing) return;
+
+    final code = capture.barcodes.first.rawValue;
+
+    if (code != null && code.isNotEmpty) {
+      isProcessing = true;
+      cameraController.stop();
+
+      await _buscarEquipo(code);
+
+      isProcessing = false;
+    }
   }
 
+  // ===========================================================
+  // 🧱 UI
+  // ===========================================================
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: const Color(0xFFFF7F32),
-        title: const Text('Escanear Código QR'),
+        title: const Text("Escanear Código QR"),
       ),
       body: Stack(
         children: [
           MobileScanner(
             controller: cameraController,
-            onDetect: (capture) {
-              final List<Barcode> barcodes = capture.barcodes;
-              if (barcodes.isNotEmpty && !isProcessing) {
-                final code = barcodes.first.rawValue;
-                if (code != null) {
-                  setState(() => isProcessing = true);
-                  cameraController.stop();
-                  _buscarEquipo(code);
-                }
-              }
-            },
+            onDetect: _onDetect,
           ),
+
+          // Marco animado
           Center(
             child: AnimatedBuilder(
               animation: _animation,
-              builder: (context, child) {
+              builder: (_, __) {
                 return CustomPaint(
                   size: const Size(250, 250),
                   painter: _QRGuidePainter(_animation.value),
@@ -143,13 +144,14 @@ class _ScanQRScreenState extends State<ScanQRScreen>
               },
             ),
           ),
+
           Align(
             alignment: Alignment.bottomCenter,
             child: Container(
               color: Colors.black54,
               padding: const EdgeInsets.all(16),
               child: const Text(
-                'Apunta la cámara hacia el código QR del equipo',
+                "Apunta la cámara hacia el código QR del equipo",
                 style: TextStyle(color: Colors.white, fontSize: 16),
               ),
             ),
@@ -158,27 +160,35 @@ class _ScanQRScreenState extends State<ScanQRScreen>
       ),
     );
   }
+
+  void _mostrarMensaje(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
 }
 
+// =======================================================
+// 🎨 Marco del escáner
+// =======================================================
 class _QRGuidePainter extends CustomPainter {
   final double progress;
+
   _QRGuidePainter(this.progress);
 
   @override
   void paint(Canvas canvas, Size size) {
-    final Paint border = Paint()
+    final border = Paint()
       ..color = Colors.orange
       ..style = PaintingStyle.stroke
       ..strokeWidth = 4;
 
-    final Paint line = Paint()
+    final line = Paint()
       ..color = Colors.orangeAccent
       ..strokeWidth = 2;
 
-    final rect = Rect.fromLTWH(0, 0, size.width, size.height);
-    canvas.drawRect(rect, border);
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), border);
 
-    final double y = size.height * progress;
+    final y = size.height * progress;
     canvas.drawLine(Offset(0, y), Offset(size.width, y), line);
   }
 

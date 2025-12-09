@@ -5,8 +5,6 @@ import 'dart:convert';
 import 'formulario_equipo.dart';
 
 class BuscarEquipoScreen extends StatefulWidget {
-  // final int directorId; // ✅ recibe el ID del director logueado
-
   const BuscarEquipoScreen({super.key});
 
   @override
@@ -17,7 +15,8 @@ class _BuscarEquipoScreenState extends State<BuscarEquipoScreen>
     with SingleTickerProviderStateMixin {
   bool isProcessing = false;
   final TextEditingController _codigoController = TextEditingController();
-  final MobileScannerController _cameraController = MobileScannerController();
+
+  final MobileScannerController cameraController = MobileScannerController();
 
   late AnimationController _animationController;
   late Animation<double> _animation;
@@ -38,16 +37,18 @@ class _BuscarEquipoScreenState extends State<BuscarEquipoScreen>
 
   @override
   void dispose() {
-    _cameraController.dispose();
     _animationController.dispose();
+    cameraController.dispose();
     _codigoController.dispose();
     super.dispose();
   }
 
-  /// 🔍 Buscar equipo en el microservicio
+  // ==================================================
+  // 🔍 Buscar equipo en el microservicio
+  // ==================================================
   Future<void> _buscarEquipo(String codigo) async {
     if (codigo.isEmpty) {
-      _mostrarMensaje('Por favor ingresa o escanea un código.');
+      _mostrarMensaje("Por favor ingresa o escanea un código.");
       return;
     }
 
@@ -55,8 +56,8 @@ class _BuscarEquipoScreenState extends State<BuscarEquipoScreen>
       setState(() => isProcessing = true);
 
       final url =
-          //'https://microservicio-gestioninventario-e7byadgfgdhpfyen.brazilsouth-01.azurewebsites.net/api/equipos/?codigo=$codigo';
-          'https://apigateway-tesis.azure-api.net/inventario/api/equipos/?codigo=$codigo';
+          "https://apigateway-tesis.azure-api.net/inventario/api/equipos/?codigo=$codigo";
+
       final response = await http.get(Uri.parse(url));
 
       if (response.statusCode == 200) {
@@ -70,30 +71,27 @@ class _BuscarEquipoScreenState extends State<BuscarEquipoScreen>
         }
 
         if (data.isNotEmpty) {
-          final equipo =
-              Map<String, dynamic>.from(data.first); // ✅ paréntesis corregido
+          final equipo = Map<String, dynamic>.from(data.first);
 
-          // ✅ Aquí pasamos el ID del director
           await Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) => FormularioEquipoScreen(
+              builder: (_) => FormularioEquipoScreen(
                 equipo: equipo,
-                //directorId: widget.directorId,
               ),
             ),
           );
 
-          // 🔄 al volver, reactivar la cámara
-          _cameraController.start();
+          // 🔄 Reactivar cámara
+          cameraController.start();
         } else {
-          _mostrarMensaje('No se encontró el equipo con código $codigo.');
+          _mostrarMensaje("No se encontró el equipo con código $codigo");
         }
       } else {
-        _mostrarMensaje('Error ${response.statusCode} al buscar el equipo.');
+        _mostrarMensaje("Error ${response.statusCode} al buscar equipo");
       }
     } catch (e) {
-      _mostrarMensaje('Error de conexión: $e');
+      _mostrarMensaje("Error de conexión: $e");
     } finally {
       setState(() => isProcessing = false);
     }
@@ -103,6 +101,9 @@ class _BuscarEquipoScreenState extends State<BuscarEquipoScreen>
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
+  // ==================================================
+  // 🟦 UI
+  // ==================================================
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -113,20 +114,22 @@ class _BuscarEquipoScreenState extends State<BuscarEquipoScreen>
       body: SingleChildScrollView(
         child: Column(
           children: [
-            // 🔶 Escáner de QR
+            // 📷 Escáner QR
             SizedBox(
               height: 300,
               child: Stack(
                 children: [
                   MobileScanner(
-                    controller: _cameraController,
+                    controller: cameraController,
                     onDetect: (capture) {
                       if (isProcessing) return;
+
                       final List<Barcode> barcodes = capture.barcodes;
                       if (barcodes.isNotEmpty) {
                         final code = barcodes.first.rawValue;
                         if (code != null && code.isNotEmpty) {
-                          _cameraController.stop();
+                          isProcessing = true;
+                          cameraController.stop();
                           _buscarEquipo(code);
                         }
                       }
@@ -149,19 +152,19 @@ class _BuscarEquipoScreenState extends State<BuscarEquipoScreen>
 
             const SizedBox(height: 20),
             const Text(
-              'Escanea un código QR o ingresa el código manualmente',
+              "Escanea un código QR o ingresa el código manualmente",
               style: TextStyle(fontSize: 16, color: Colors.black87),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 25),
 
-            // 🟣 Campo manual de búsqueda
+            // ✏ Ingreso manual
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: TextField(
                 controller: _codigoController,
                 decoration: InputDecoration(
-                  labelText: 'Código del equipo (ej: EQP-0001)',
+                  labelText: "Código del equipo",
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
@@ -176,12 +179,11 @@ class _BuscarEquipoScreenState extends State<BuscarEquipoScreen>
 
             const SizedBox(height: 20),
 
-            // 🔘 Botón de búsqueda manual
             ElevatedButton.icon(
               onPressed: () =>
                   _buscarEquipo(_codigoController.text.trim().toUpperCase()),
               icon: const Icon(Icons.manage_search),
-              label: const Text('Buscar Equipo'),
+              label: const Text("Buscar Equipo"),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF00B894),
                 padding:
@@ -198,10 +200,11 @@ class _BuscarEquipoScreenState extends State<BuscarEquipoScreen>
   }
 }
 
-/// 🎯 Dibuja el marco y la línea animada del escáner
+// ==================================================
+// 🎨 Pintor del cuadro del escáner
+// ==================================================
 class _QRGuidePainter extends CustomPainter {
   final double progress;
-
   _QRGuidePainter(this.progress);
 
   @override

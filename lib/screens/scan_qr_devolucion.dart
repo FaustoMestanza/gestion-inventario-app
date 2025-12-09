@@ -15,19 +15,21 @@ class ScanQRDevolucionScreen extends StatefulWidget {
 
 class _ScanQRDevolucionScreenState extends State<ScanQRDevolucionScreen>
     with SingleTickerProviderStateMixin {
-  bool isProcessing = false;
   final MobileScannerController cameraController = MobileScannerController();
   final TextEditingController codigoManualCtrl = TextEditingController();
+
+  bool isProcessing = false;
+
+  final String prestamosURL =
+      "https://apigateway-tesis.azure-api.net/prestamos/api/prestamos/";
 
   late AnimationController _animationController;
   late Animation<double> _animation;
 
-  final String prestamosURL =
-      'https://apigateway-tesis.azure-api.net/prestamos/api/prestamos/';
-
   @override
   void initState() {
     super.initState();
+
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 2),
@@ -38,148 +40,151 @@ class _ScanQRDevolucionScreenState extends State<ScanQRDevolucionScreen>
     );
   }
 
+  @override
+  void dispose() {
+    cameraController.dispose();
+    codigoManualCtrl.dispose();
+    _animationController.dispose();
+    super.dispose();
+  }
+
+  // =======================================================
+  // 🔍 BUSCAR PRÉSTAMO
+  // =======================================================
   Future<void> _buscarPrestamo(String codigo) async {
     if (codigo.trim().isEmpty) {
-      _mostrarMensaje('Ingrese o escanee un código válido.');
+      _mostrarMensaje("Ingrese o escanee un código válido.");
       return;
     }
 
     try {
-      print('📷 Código detectado o ingresado: $codigo');
       setState(() => isProcessing = true);
       cameraController.stop();
 
-      final url = '$prestamosURL?codigo=$codigo';
+      final url = "$prestamosURL?codigo=$codigo";
       final response = await http.get(Uri.parse(url));
 
-      print('🔹 Respuesta ${response.statusCode}: ${response.body}');
-
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
+        final body = jsonDecode(response.body);
 
-        if (data is List && data.isNotEmpty) {
-          final prestamo = data.first;
-          final estado = prestamo['estado'];
-
-          print("ESTADO DESDE API: $estado");
-
-          // 🔹 Caso 1: Equipo disponible (ya devuelto)
-          if (estado == "Disponible") {
-            _mostrarMensaje("⚠️ El equipo ya fue devuelto.");
-            cameraController.start();
-            setState(() => isProcessing = false);
-            return;
-          }
-
-          // 🔹 Caso 2: Préstamo cerrado
-          if (estado == "Cerrado") {
-            _mostrarMensaje("⚠️ El préstamo ya fue cerrado previamente.");
-            cameraController.start();
-            setState(() => isProcessing = false);
-            return;
-          }
-
-          // 🔹 Caso 3: Vencido → permitir devolución con sanción
-          if (estado == "Vencido") {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(
-                builder: (context) => ScanDevolucionScreen(
-                  prestamo: Map<String, dynamic>.from(prestamo),
-                  docenteId: widget.docenteId,
-                ),
-              ),
-            );
-            return;
-          }
-
-          // 🔹 Caso 4: Abierto → validar docente
-          if (estado == "Abierto") {
-            final registradoPor = prestamo['registrado_por_id'];
-            if (registradoPor != widget.docenteId) {
-              _mostrarMensaje(
-                "⚠️ No puedes registrar la devolución de un préstamo realizado por otro docente.",
-              );
-              cameraController.start();
-              setState(() => isProcessing = false);
-              return;
-            }
-
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(
-                builder: (context) => ScanDevolucionScreen(
-                  prestamo: Map<String, dynamic>.from(prestamo),
-                  docenteId: widget.docenteId,
-                ),
-              ),
-            );
-            return;
-          }
-
-          // 🔹 Cualquier otro estado
-          _mostrarMensaje("⚠️ Estado desconocido del préstamo.");
+        if (body is! List || body.isEmpty) {
+          _mostrarMensaje("No se encontró préstamo para ese código.");
           cameraController.start();
           setState(() => isProcessing = false);
-        } else {
-          _mostrarMensaje('No se encontró préstamo activo para ese código.');
-          cameraController.start();
-          setState(() => isProcessing = false);
+          return;
         }
-      } else {
-        _mostrarMensaje('Error ${response.statusCode} al consultar préstamo.');
+
+        final prestamo = Map<String, dynamic>.from(body.first);
+        final estado = prestamo["estado"];
+
+        // 🔹 Ya devuelto
+        if (estado == "Disponible") {
+          _mostrarMensaje("⚠️ El equipo ya fue devuelto.");
+          cameraController.start();
+          setState(() => isProcessing = false);
+          return;
+        }
+
+        // 🔹 Cerrado
+        if (estado == "Cerrado") {
+          _mostrarMensaje("⚠️ El préstamo ya está cerrado.");
+          cameraController.start();
+          setState(() => isProcessing = false);
+          return;
+        }
+
+        // 🔹 Vencido → procede devolución
+        if (estado == "Vencido") {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (_) => ScanDevolucionScreen(
+                prestamo: prestamo,
+                docenteId: widget.docenteId,
+              ),
+            ),
+          );
+          return;
+        }
+
+        // 🔹 Abierto → Validar docente
+        if (estado == "Abierto") {
+          if (prestamo["registrado_por_id"] != widget.docenteId) {
+            _mostrarMensaje("⚠️ Este préstamo no fue registrado por usted.");
+            cameraController.start();
+            setState(() => isProcessing = false);
+            return;
+          }
+
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (_) => ScanDevolucionScreen(
+                prestamo: prestamo,
+                docenteId: widget.docenteId,
+              ),
+            ),
+          );
+          return;
+        }
+
+        _mostrarMensaje("Estado desconocido del préstamo.");
         cameraController.start();
-        setState(() => isProcessing = false);
+      } else {
+        _mostrarMensaje("Error ${response.statusCode} al consultar préstamo.");
+        cameraController.start();
       }
     } catch (e) {
-      _mostrarMensaje('Error de conexión: $e');
+      _mostrarMensaje("Error de conexión: $e");
       cameraController.start();
+    } finally {
       setState(() => isProcessing = false);
     }
   }
 
   void _mostrarMensaje(String msg) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
+  // =======================================================
+  // 📷 LÓGICA DEL ESCÁNER
+  // =======================================================
+  void _onDetect(BarcodeCapture capture) async {
+    if (isProcessing) return;
+
+    final code = capture.barcodes.first.rawValue;
+
+    if (code != null && code.isNotEmpty) {
+      isProcessing = true;
+      await _buscarPrestamo(code);
+      isProcessing = false;
     }
   }
 
-  @override
-  void dispose() {
-    _animationController.dispose();
-    cameraController.dispose();
-    codigoManualCtrl.dispose();
-    super.dispose();
-  }
-
+  // =======================================================
+  // UI
+  // =======================================================
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Buscar Préstamo para Devolución'),
+        title: const Text("Buscar Préstamo para Devolución"),
         backgroundColor: const Color(0xFF00B894),
       ),
       body: Stack(
         children: [
-          // 📷 Cámara activa
+          // 📷 Cámara
           MobileScanner(
             controller: cameraController,
-            onDetect: (capture) {
-              final List<Barcode> barcodes = capture.barcodes;
-              if (barcodes.isNotEmpty && !isProcessing) {
-                final code = barcodes.first.rawValue;
-                if (code != null) {
-                  _buscarPrestamo(code);
-                }
-              }
-            },
+            onDetect: _onDetect,
           ),
 
-          // 🟩 Cuadro animado de guía
+          // Marco animado
           Center(
             child: AnimatedBuilder(
               animation: _animation,
-              builder: (context, child) {
+              builder: (_, __) {
                 return CustomPaint(
                   size: const Size(250, 250),
                   painter: _QRGuidePainter(_animation.value),
@@ -188,71 +193,72 @@ class _ScanQRDevolucionScreenState extends State<ScanQRDevolucionScreen>
             ),
           ),
 
-          // 📝 Campo manual de búsqueda
+          // Formulario inferior
           Align(
             alignment: Alignment.bottomCenter,
             child: Container(
-              color: Colors.black87,
               padding: const EdgeInsets.all(16),
+              color: Colors.black87,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   const Text(
-                    'Escanee el código QR o ingrese el código manualmente',
+                    "Escanee un código o ingréselo manualmente",
                     style: TextStyle(color: Colors.white, fontSize: 15),
                   ),
                   const SizedBox(height: 10),
                   TextField(
                     controller: codigoManualCtrl,
                     decoration: InputDecoration(
-                      hintText: 'Ingrese el código del préstamo o equipo',
+                      hintText: "Código del préstamo o equipo",
                       filled: true,
                       fillColor: Colors.white,
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      contentPadding:
-                          const EdgeInsets.symmetric(horizontal: 10),
+                          borderRadius: BorderRadius.circular(12)),
                     ),
                   ),
                   const SizedBox(height: 10),
                   ElevatedButton.icon(
-                    onPressed: () => _buscarPrestamo(codigoManualCtrl.text),
+                    onPressed: () =>
+                        _buscarPrestamo(codigoManualCtrl.text.trim()),
                     icon: const Icon(Icons.search),
-                    label: const Text('Buscar Manualmente'),
+                    label: const Text("Buscar manualmente"),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.green,
                     ),
-                  ),
+                  )
                 ],
               ),
             ),
-          ),
+          )
         ],
       ),
     );
   }
 }
 
+// =======================================================
+// 🎨 Pintor del marco
+// =======================================================
 class _QRGuidePainter extends CustomPainter {
   final double progress;
+
   _QRGuidePainter(this.progress);
 
   @override
   void paint(Canvas canvas, Size size) {
-    final Paint border = Paint()
+    final border = Paint()
       ..color = Colors.greenAccent
       ..style = PaintingStyle.stroke
       ..strokeWidth = 4;
 
-    final Paint line = Paint()
+    final line = Paint()
       ..color = Colors.lightGreenAccent
       ..strokeWidth = 2;
 
-    final rect = Rect.fromLTWH(0, 0, size.width, size.height);
-    canvas.drawRect(rect, border);
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), border);
 
-    final double y = size.height * progress;
+    final y = size.height * progress;
     canvas.drawLine(Offset(0, y), Offset(size.width, y), line);
   }
 
