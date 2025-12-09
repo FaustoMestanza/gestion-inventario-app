@@ -17,12 +17,12 @@ jobs:
 
     steps:
       - name: Checkout código
-        uses: actions/checkout@v4    # <-- actualizado
+        uses: actions/checkout@v3
 
       - name: Instalar Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: 'stable'
+          flutter-version: '3.24.0'   # ✔ Versión válida
 
       - name: Obtener dependencias
         run: flutter pub get
@@ -34,7 +34,7 @@ jobs:
         run: flutter build apk --release
 
       - name: Guardar APK
-        uses: actions/upload-artifact@v4    # <-- actualizado
+        uses: actions/upload-artifact@v4   # ✔ Versión correcta
         with:
           name: app-release-apk
           path: build/app/outputs/flutter-apk/app-release.apk
@@ -46,4 +46,3 @@ jobs:
     steps:
       - name: Despliegue completado
         run: echo "APK generado y disponible para descargar."
-
