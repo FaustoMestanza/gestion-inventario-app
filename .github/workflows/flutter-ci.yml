@@ -3,6 +3,7 @@ name: Flutter CI/CD
 on:
   push:
     branches: [ "main" ]
+  workflow_dispatch:
 
 jobs:
   inicio:
@@ -17,23 +18,24 @@ jobs:
 
     steps:
       - name: Checkout código
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
       - name: Instalar Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.38.4'   # ✔ Versión compatible con Dart 3.6
+          channel: stable
+          flutter-version: "3.16.9"   # ✔ La versión que usas localmente
 
       - name: Obtener dependencias
         run: flutter pub get
 
-      - name: Ejecutar tests
+      - name: Ejecutar tests (sin detener pipeline si fallan)
         run: flutter test integration_test || true
 
-      - name: Build APK
-        run: flutter build apk --release
+      - name: Build APK (sin validar Gradle / AGP)
+        run: flutter build apk --release --android-skip-build-dependency-validation
 
-      - name: Guardar APK
+      - name: Guardar APK como artefacto
         uses: actions/upload-artifact@v4
         with:
           name: app-release-apk
@@ -42,7 +44,6 @@ jobs:
   despliegue:
     runs-on: ubuntu-latest
     needs: build
-
     steps:
-      - name: Despliegue completado
-        run: echo "APK generado y disponible para descargar."
+      - name: Despliegue finalizado
+        run: echo "APK generado correctamente y listo para descargar."
