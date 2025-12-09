@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "973090020280",
+    "project_id": "app-android-invemtarios",
+    "storage_bucket": "app-android-invemtarios.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:973090020280:android:f798ec5fa94fdc30970d4d",
+        "android_client_info": {
+          "package_name": "com.example.gestion_inventario_prestamos_patrick"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAbYdyyt_niohs0vxiTY_u2HQBA1UioqF0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
