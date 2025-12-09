@@ -17,7 +17,7 @@ jobs:
 
     steps:
       - name: Checkout código
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4    # <-- actualizado
 
       - name: Instalar Flutter
         uses: subosito/flutter-action@v2
@@ -28,13 +28,13 @@ jobs:
         run: flutter pub get
 
       - name: Ejecutar tests
-        run: flutter test integration_test || true  # No falla si no hay tests
+        run: flutter test integration_test || true
 
       - name: Build APK
         run: flutter build apk --release
 
       - name: Guardar APK
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4    # <-- actualizado
         with:
           name: app-release-apk
           path: build/app/outputs/flutter-apk/app-release.apk
