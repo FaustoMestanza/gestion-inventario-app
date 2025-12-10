@@ -21,8 +21,12 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
-      - name: Run tests (no detiene si falla)
-        run: flutter test || true
+      - name: Run tests (si falla no detiene el build)
+        run: |
+          set +e
+          flutter test
+          echo "Tests pueden fallar — el build continuará."
+          exit 0
 
       - name: Build APK sin validar Gradle/AGP
         run: flutter build apk --release --skip-validation
