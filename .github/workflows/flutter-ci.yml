@@ -18,13 +18,13 @@ jobs:
 
     steps:
       - name: Checkout código
-      - uses: actions/checkout@v3
+        uses: actions/checkout@v3
 
       - name: Instalar Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: stable
-          flutter-version: "3.16.9"   # ✔ La versión que usas localmente
+          flutter-version: "3.16.9"
 
       - name: Obtener dependencias
         run: flutter pub get
@@ -32,10 +32,10 @@ jobs:
       - name: Ejecutar tests (sin detener pipeline si fallan)
         run: flutter test integration_test || true
 
-      - name: Build APK (sin validar Gradle / AGP)
+      - name: Build APK sin validar Gradle/AGP
         run: flutter build apk --release --android-skip-build-dependency-validation
 
-      - name: Guardar APK como artefacto
+      - name: Guardar APK
         uses: actions/upload-artifact@v4
         with:
           name: app-release-apk
